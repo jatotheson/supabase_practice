@@ -14,6 +14,34 @@ function getRedirectUrl() {
   return window.location.origin;
 }
 
+function getSupabaseProjectRef() {
+  try {
+    return new URL(SUPABASE_URL).hostname.split(".")[0];
+  } catch {
+    return null;
+  }
+}
+
+function clearSupabaseAuthCache() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const projectRef = getSupabaseProjectRef();
+  if (!projectRef) {
+    return;
+  }
+
+  const prefix = `sb-${projectRef}-`;
+  [window.localStorage, window.sessionStorage].forEach((storage) => {
+    Object.keys(storage).forEach((key) => {
+      if (key.startsWith(prefix)) {
+        storage.removeItem(key);
+      }
+    });
+  });
+}
+
 export async function getSession() {
   const { data } = await client.auth.getSession();
   return data.session;
@@ -23,12 +51,20 @@ export async function signInWithGithub() {
   const redirectTo = getRedirectUrl();
   return client.auth.signInWithOAuth({
     provider: "github",
-    options: redirectTo ? { redirectTo } : undefined,
+    options: redirectTo
+      ? {
+          redirectTo,
+          // GitHub supports prompt=select_account for account picker behavior.
+          queryParams: { prompt: "select_account" },
+        }
+      : undefined,
   });
 }
 
 export async function signOut() {
-  return client.auth.signOut();
+  const result = await client.auth.signOut({ scope: "global" });
+  clearSupabaseAuthCache();
+  return result;
 }
 
 export async function getRecords() {
