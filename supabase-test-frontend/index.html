@@ -1,113 +1,17 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
   <h1>Supabase Test - Auth</h1>
-
   <input type="button" value="login" id="login" />
-  <script>
-    const SUPABASE_PUBLIC_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhicXlydnhidnJ0a3RreHZidHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1OTg4MDMsImV4cCI6MjA4NzE3NDgwM30.RP4LrppCwRpyIEeUx7fn7Ibgb6oZOTOVTiBU4tcz8Uw';
-    const SUPABASE_URL = "https://hbqyrvxbvrtktkxvbtwf.supabase.co";
-    const client = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_ANON_KEY);
-
-
-    async function signInWithGithub() {
-      const { data, error } = await client.auth.signInWithOAuth({
-        provider: "github",
-        options: {
-          redirectTo: "http://localhost:5173",
-        },
-      });
-    }
-    document
-      .querySelector("#login")
-      .addEventListener("click", signInWithGithub);
-  </script>
-
   <input type="button" value="logout" id="logout" />
-  <script>
-    async function checkLogin() {
-      const authInfo = await client.auth.getSession();
-      const session = authInfo.data.session;
-      console.log("session", session);
-
-      document.querySelector("#login").style.display = "none";
-      document.querySelector("#logout").style.display = "none";
-      if (session === null) {
-        document.querySelector("#login").style.display = "inline";
-      } else {
-        document.querySelector("#logout").style.display = "inline";
-      }
-    }
-
-    checkLogin();
-  </script>
-
-  <script>
-    async function signOut() {
-      const { error } = await client.auth.signOut();
-      checkLogin();
-      refreshHistory();
-    }
-    document.querySelector("#logout").addEventListener("click", signOut);
-  </script>
-
-  <div id="history"></div>
-  <script>
-    async function refreshHistory() {
-      const authInfo = await client.auth.getSession();
-      const session = authInfo.data.session;
-      const canDelete = session !== null;
-
-      let { data: record, error } = await client.from("page").select("*");
-      let tag = "";
-      for (let i = 0; i < record.length; i++) {
-        const deleteButton = canDelete
-          ? `<p>
-              <input type="button" value="delete" onclick="
-                deleteRecord(${record[i].id})
-                " />
-            </p>`
-          : "";
-        tag +=
-          `<div style="margin:20px 0">
-            <h2>${record[i].title}</h2>${record[i].body}
-            ${deleteButton}
-          </div>`
-        ;
-      }
-      document.querySelector("#history").innerHTML = tag;
-    }
-
-    refreshHistory();
-  </script>
-
   <input type="button" value="create" id="create_btn" />
-  <script>
-    async function recordHandler() {
-      const { data, error } = await client
-        .from("page")
-        .insert([{ title: prompt("title?"), body: prompt("body?") }]);
-      refreshHistory();
-    }
-    document
-      .querySelector("#create_btn")
-      .addEventListener("click", recordHandler);
-  </script>
+  <div id="history"></div>
 
-  <script>
-    async function deleteRecord(id) {
-      const { data, error } = await client.from("page").delete().eq("id", id);
-      refreshHistory();
-    }
-  </script>
-
+  <script type="module" src="src/main.ts"></script>
 </body>
-
 </html>
