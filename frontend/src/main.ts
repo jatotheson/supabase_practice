@@ -1,4 +1,5 @@
 import "./app.css";
+import githubLogo from "./assets/github-logo.svg";
 import {
   getSession,
   signInWithGithub,
@@ -14,7 +15,8 @@ type PageRecord = {
   body: string | null;
 };
 
-const loginButton = document.querySelector<HTMLInputElement>("#login");
+const loginButton = document.querySelector<HTMLButtonElement>("#login");
+const loginIcon = document.querySelector<HTMLImageElement>("#login-icon");
 const logoutButton = document.querySelector<HTMLInputElement>("#logout");
 const createButton = document.querySelector<HTMLInputElement>("#create_btn");
 const historyEl = document.querySelector<HTMLDivElement>("#history");
@@ -38,7 +40,7 @@ function formatError(error: unknown): string {
 async function checkLogin(): Promise<void> {
   try {
     const session = await getSession();
-    if (loginButton) loginButton.style.display = session ? "none" : "inline-block";
+    if (loginButton) loginButton.style.display = session ? "none" : "inline-flex";
     if (logoutButton) logoutButton.style.display = session ? "inline-block" : "none";
   } catch (error) {
     setStatus(`Unable to check session: ${formatError(error)}`, true);
@@ -175,3 +177,7 @@ createButton?.addEventListener("click", async () => {
 
 void checkLogin();
 void refreshHistory();
+
+if (loginIcon) {
+  loginIcon.src = githubLogo;
+}
