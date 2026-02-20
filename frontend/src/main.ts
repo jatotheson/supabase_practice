@@ -5,7 +5,7 @@ import {
   getRecords,
   createRecord,
   deleteRecord,
-} from "../../supabase-test-backend/supabase.js";
+} from "../../backend/supabase.js";
 
 async function checkLogin() {
   const session = await getSession();
