@@ -1,9 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://hbqyrvxbvrtktkxvbtwf.supabase.co";
-const SUPABASE_PUBLIC_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhicXlydnhidnJ0a3RreHZidHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1OTg4MDMsImV4cCI6MjA4NzE3NDgwM30.RP4LrppCwRpyIEeUx7fn7Ibgb6oZOTOVTiBU4tcz8Uw";
+const SUPABASE_URL = import.meta.env?.VITE_SUPABASE_URL || 
+  "https://hbqyrvxbvrtktkxvbtwf.supabase.co";
+const SUPABASE_PUBLIC_ANON_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhicXlydnhidnJ0a3RreHZidHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1OTg4MDMsImV4cCI6MjA4NzE3NDgwM30.RP4LrppCwRpyIEeUx7fn7Ibgb6oZOTOVTiBU4tcz8Uw";
 
 export const client = createClient(SUPABASE_URL, SUPABASE_PUBLIC_ANON_KEY);
+
+function getRedirectUrl() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  return window.location.origin;
+}
 
 export async function getSession() {
   const { data } = await client.auth.getSession();
@@ -11,9 +20,10 @@ export async function getSession() {
 }
 
 export async function signInWithGithub() {
+  const redirectTo = getRedirectUrl();
   return client.auth.signInWithOAuth({
     provider: "github",
-    options: { redirectTo: "http://localhost:5173" },
+    options: redirectTo ? { redirectTo } : undefined,
   });
 }
 

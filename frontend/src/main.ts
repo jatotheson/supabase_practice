@@ -1,3 +1,4 @@
+import "./app.css";
 import {
   getSession,
   signInWithGithub,
@@ -7,51 +8,170 @@ import {
   deleteRecord,
 } from "../../backend/supabase.js";
 
-async function checkLogin() {
-  const session = await getSession();
-  (document.querySelector("#login") as HTMLElement)!.style.display = session ? "none" : "inline";
-  (document.querySelector("#logout") as HTMLElement)!.style.display = session ? "inline" : "none";
+type PageRecord = {
+  id: string | number;
+  title: string | null;
+  body: string | null;
+};
+
+const loginButton = document.querySelector<HTMLInputElement>("#login");
+const logoutButton = document.querySelector<HTMLInputElement>("#logout");
+const createButton = document.querySelector<HTMLInputElement>("#create_btn");
+const historyEl = document.querySelector<HTMLDivElement>("#history");
+const statusEl = document.querySelector<HTMLParagraphElement>("#status");
+
+function setStatus(message: string, isError = false): void {
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("error", isError);
 }
 
-async function refreshHistory() {
-  const session = await getSession();
-  const { data: records } = await getRecords();
-  const canDelete = session !== null;
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
 
-  const html = (records || []).map((record) => `
-    <div style="margin:20px 0">
-      <h2>${record.title}</h2>
-      ${record.body}
-      ${canDelete ? `<input type="button" value="delete" data-id="${record.id}" class="delete-btn" />` : ""}
-    </div>
-  `).join("");
+async function checkLogin(): Promise<void> {
+  try {
+    const session = await getSession();
+    if (loginButton) loginButton.style.display = session ? "none" : "inline-block";
+    if (logoutButton) logoutButton.style.display = session ? "inline-block" : "none";
+  } catch (error) {
+    setStatus(`Unable to check session: ${formatError(error)}`, true);
+  }
+}
 
-  const historyEl = document.querySelector("#history");
-  if (historyEl) {
-    historyEl.innerHTML = html;
+function createRecordElement(record: PageRecord, canDelete: boolean): HTMLElement {
+  const wrapper = document.createElement("article");
+  wrapper.className = "record";
+
+  const title = document.createElement("h2");
+  title.textContent = record.title || "(untitled)";
+  wrapper.appendChild(title);
+
+  const body = document.createElement("p");
+  body.textContent = record.body || "(no body)";
+  wrapper.appendChild(body);
+
+  if (canDelete) {
+    const deleteButton = document.createElement("input");
+    deleteButton.type = "button";
+    deleteButton.value = "delete";
+    deleteButton.className = "delete-btn";
+    deleteButton.addEventListener("click", async () => {
+      try {
+        const { error } = await deleteRecord(String(record.id));
+        if (error) {
+          setStatus(`Delete failed: ${error.message}`, true);
+          return;
+        }
+        setStatus("Record deleted.");
+        await refreshHistory();
+      } catch (error) {
+        setStatus(`Delete failed: ${formatError(error)}`, true);
+      }
+    });
+    wrapper.appendChild(deleteButton);
   }
 
-  // Attach delete listeners after rendering (safer than inline onclick)
-  document.querySelectorAll(".delete-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await deleteRecord((btn as HTMLElement).dataset.id);
-      refreshHistory();
-    });
-  });
+  return wrapper;
 }
 
-document.querySelector("#login")?.addEventListener("click", signInWithGithub);
+async function refreshHistory(): Promise<void> {
+  if (!historyEl) {
+    return;
+  }
 
-document.querySelector("#logout")?.addEventListener("click", async () => {
-  await signOut();
-  checkLogin();
-  refreshHistory();
+  historyEl.replaceChildren();
+
+  try {
+    const session = await getSession();
+    const { data: records, error } = await getRecords();
+    if (error) {
+      throw error;
+    }
+
+    const safeRecords = (records || []) as PageRecord[];
+    const canDelete = session !== null;
+
+    if (safeRecords.length === 0) {
+      const emptyState = document.createElement("p");
+      emptyState.className = "empty";
+      emptyState.textContent = "No records yet.";
+      historyEl.appendChild(emptyState);
+      return;
+    }
+
+    safeRecords.forEach((record) => {
+      historyEl.appendChild(createRecordElement(record, canDelete));
+    });
+  } catch (error) {
+    setStatus(`Unable to load records: ${formatError(error)}`, true);
+  }
+}
+
+loginButton?.addEventListener("click", async () => {
+  try {
+    const { error } = await signInWithGithub();
+    if (error) {
+      setStatus(`Login failed: ${error.message}`, true);
+    }
+  } catch (error) {
+    setStatus(`Login failed: ${formatError(error)}`, true);
+  }
 });
 
-document.querySelector("#create_btn")?.addEventListener("click", async () => {
-  await createRecord(prompt("title?"), prompt("body?"));
-  refreshHistory();
+logoutButton?.addEventListener("click", async () => {
+  try {
+    const { error } = await signOut();
+    if (error) {
+      setStatus(`Logout failed: ${error.message}`, true);
+      return;
+    }
+    setStatus("Logged out.");
+    await checkLogin();
+    await refreshHistory();
+  } catch (error) {
+    setStatus(`Logout failed: ${formatError(error)}`, true);
+  }
 });
 
-checkLogin();
-refreshHistory();
+createButton?.addEventListener("click", async () => {
+  const title = prompt("title?");
+  if (title === null) {
+    setStatus("Create cancelled.");
+    return;
+  }
+
+  const body = prompt("body?");
+  if (body === null) {
+    setStatus("Create cancelled.");
+    return;
+  }
+
+  const cleanTitle = title.trim();
+  const cleanBody = body.trim();
+  if (!cleanTitle || !cleanBody) {
+    setStatus("Title and body are required.", true);
+    return;
+  }
+
+  try {
+    const { error } = await createRecord(cleanTitle, cleanBody);
+    if (error) {
+      setStatus(`Create failed: ${error.message}`, true);
+      return;
+    }
+    setStatus("Record created.");
+    await refreshHistory();
+  } catch (error) {
+    setStatus(`Create failed: ${formatError(error)}`, true);
+  }
+});
+
+void checkLogin();
+void refreshHistory();

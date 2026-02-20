@@ -3,14 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width" />
-  <link rel="stylesheet" href="style.css" />
+  <title>Supabase Test</title>
 </head>
 <body>
-  <h1>Supabase Test - Auth</h1>
-  <input type="button" value="login" id="login" />
-  <input type="button" value="logout" id="logout" />
-  <input type="button" value="create" id="create_btn" />
-  <div id="history"></div>
+  <main>
+    <h1>Supabase Test - Auth</h1>
+    <div class="actions">
+      <input type="button" value="login" id="login" />
+      <input type="button" value="logout" id="logout" />
+      <input type="button" value="create" id="create_btn" />
+    </div>
+    <p id="status" aria-live="polite"></p>
+    <div id="history"></div>
+  </main>
 
   <script type="module" src="src/main.ts"></script>
 </body>
