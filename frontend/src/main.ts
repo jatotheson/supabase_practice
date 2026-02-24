@@ -1,5 +1,6 @@
 import "./app.css";
 import githubLogo from "./assets/github-logo.svg";
+import googleLogo from "./assets/google-logo.svg";
 import {
   getSession,
   signInWithGithub,
@@ -15,8 +16,10 @@ type PageRecord = {
   body: string | null;
 };
 
-const loginButton = document.querySelector<HTMLButtonElement>("#login");
-const loginIcon = document.querySelector<HTMLImageElement>("#login-icon");
+const googleSignInButton = document.querySelector<HTMLButtonElement>("#google_sign_in_btn");
+const githubSignInButton = document.querySelector<HTMLButtonElement>("#github_sign_in_btn");
+const googleSignInIcon = document.querySelector<HTMLImageElement>("#google-sign-in-icon");
+const githubSignInIcon = document.querySelector<HTMLImageElement>("#github-sign-in-icon");
 const logoutButton = document.querySelector<HTMLInputElement>("#logout");
 const createButton = document.querySelector<HTMLInputElement>("#create_btn");
 const historyEl = document.querySelector<HTMLDivElement>("#history");
@@ -40,7 +43,8 @@ function formatError(error: unknown): string {
 async function checkLogin(): Promise<void> {
   try {
     const session = await getSession();
-    if (loginButton) loginButton.style.display = session ? "none" : "inline-flex";
+    if (googleSignInButton) googleSignInButton.style.display = session ? "none" : "inline-flex";
+    if (githubSignInButton) githubSignInButton.style.display = session ? "none" : "inline-flex";
     if (logoutButton) logoutButton.style.display = session ? "inline-block" : "none";
   } catch (error) {
     setStatus(`Unable to check session: ${formatError(error)}`, true);
@@ -116,7 +120,11 @@ async function refreshHistory(): Promise<void> {
   }
 }
 
-loginButton?.addEventListener("click", async () => {
+googleSignInButton?.addEventListener("click", () => {
+  console.log("clicked google sign in button!");
+});
+
+githubSignInButton?.addEventListener("click", async () => {
   try {
     const { error } = await signInWithGithub();
     if (error) {
@@ -178,6 +186,5 @@ createButton?.addEventListener("click", async () => {
 void checkLogin();
 void refreshHistory();
 
-if (loginIcon) {
-  loginIcon.src = githubLogo;
-}
+if (googleSignInIcon) googleSignInIcon.src = googleLogo;
+if (githubSignInIcon) githubSignInIcon.src = githubLogo;
