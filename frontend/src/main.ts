@@ -23,6 +23,9 @@ const googleSignInIcon = document.querySelector<HTMLImageElement>("#google-sign-
 const githubSignInIcon = document.querySelector<HTMLImageElement>("#github-sign-in-icon");
 const logoutButton = document.querySelector<HTMLInputElement>("#logout");
 const createButton = document.querySelector<HTMLInputElement>("#create_btn");
+const createForm = document.querySelector<HTMLFormElement>("#create_form");
+const createTitleInput = document.querySelector<HTMLInputElement>("#create_title");
+const createBodyInput = document.querySelector<HTMLTextAreaElement>("#create_body");
 const historyEl = document.querySelector<HTMLDivElement>("#history");
 const statusEl = document.querySelector<HTMLParagraphElement>("#status");
 
@@ -39,6 +42,22 @@ function formatError(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function setCreateFormVisibility(show: boolean): void {
+  if (!createForm) {
+    return;
+  }
+  createForm.hidden = !show;
+}
+
+function resetCreateForm(): void {
+  if (createTitleInput) {
+    createTitleInput.value = "";
+  }
+  if (createBodyInput) {
+    createBodyInput.value = "";
+  }
 }
 
 async function checkLogin(): Promise<void> {
@@ -158,21 +177,16 @@ logoutButton?.addEventListener("click", async () => {
   }
 });
 
-createButton?.addEventListener("click", async () => {
-  const title = prompt("title?");
-  if (title === null) {
-    setStatus("Create cancelled.");
-    return;
-  }
+createButton?.addEventListener("click", () => {
+  setCreateFormVisibility(true);
+  createTitleInput?.focus();
+});
 
-  const body = prompt("body?");
-  if (body === null) {
-    setStatus("Create cancelled.");
-    return;
-  }
+createForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
 
-  const cleanTitle = title.trim();
-  const cleanBody = body.trim();
+  const cleanTitle = createTitleInput?.value.trim() || "";
+  const cleanBody = createBodyInput?.value.trim() || "";
   if (!cleanTitle || !cleanBody) {
     setStatus("Title and body are required.", true);
     return;
@@ -185,6 +199,8 @@ createButton?.addEventListener("click", async () => {
       return;
     }
     setStatus("Record created.");
+    resetCreateForm();
+    setCreateFormVisibility(false);
     await refreshHistory();
   } catch (error) {
     setStatus(`Create failed: ${formatError(error)}`, true);

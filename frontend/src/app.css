@@ -108,3 +108,49 @@ input[type="button"]:hover {
   margin: 0;
   color: #6b7280;
 }
+
+.create-form {
+  margin-bottom: 0.75rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.create-form label {
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.create-form input[type="text"],
+.create-form textarea {
+  width: 100%;
+  border: 1px solid #dbeafe;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+.create-form textarea {
+  resize: vertical;
+  min-height: 7rem;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.form-actions button {
+  border: 1px solid #c7d2fe;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  background: #eef2ff;
+  color: #1e1b4b;
+  cursor: pointer;
+}
+
+.form-actions button:hover {
+  background: #e0e7ff;
+}
