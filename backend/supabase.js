@@ -47,6 +47,20 @@ export async function getSession() {
   return data.session;
 }
 
+export async function signInWithGoogle() {
+  const redirectTo = getRedirectUrl();
+  return client.auth.signInWithOAuth({
+    provider: "google",
+    options: redirectTo
+      ? {
+          redirectTo,
+          // Google supports prompt=select_account for account picker behavior.
+          queryParams: { prompt: "select_account" },
+        }
+      : undefined,
+  });
+}
+
 export async function signInWithGithub() {
   const redirectTo = getRedirectUrl();
   return client.auth.signInWithOAuth({

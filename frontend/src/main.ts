@@ -8,6 +8,7 @@ import {
   getRecords,
   createRecord,
   deleteRecord,
+  signInWithGoogle,
 } from "../../backend/supabase.js";
 
 type PageRecord = {
@@ -120,8 +121,15 @@ async function refreshHistory(): Promise<void> {
   }
 }
 
-googleSignInButton?.addEventListener("click", () => {
-  console.log("clicked google sign in button!");
+googleSignInButton?.addEventListener("click", async () => {
+  try {
+    const { error } = await signInWithGoogle();
+    if (error) {
+      setStatus(`Login failed: ${error.message}`, true);
+    }
+  } catch (error) {
+    setStatus(`Login failed: ${formatError(error)}`, true);
+  }
 });
 
 githubSignInButton?.addEventListener("click", async () => {
