@@ -26,6 +26,8 @@ Frontend uses a Vite proxy for `/api` -> `http://localhost:3001` by default.
 
 ## API Routes
 - `GET /api/health`
+- `GET /api/openapi.json`
+- `GET /api/docs`
 - `GET /api/posts`
 - `POST /api/posts` `{ title, body }`
 - `DELETE /api/posts/:id`

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import multer from "multer";
+import swaggerUi from "swagger-ui-express";
 import {
   createPost,
   deletePost,
@@ -9,6 +10,7 @@ import {
   listPublicImages,
   uploadPublicImage,
 } from "./supabase.js";
+import openapi from "./openapi.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -20,6 +22,10 @@ const upload = multer({
 });
 
 app.use(express.json({ limit: "1mb" }));
+app.get("/api/openapi.json", (_req, res) => {
+  res.json(openapi);
+});
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 
 function toStatus(error, fallback = 500) {
   if (typeof error?.statusCode === "number") {
