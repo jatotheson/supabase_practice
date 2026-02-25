@@ -1,21 +1,9 @@
 import "./app.css";
 import githubLogo from "./assets/github-logo.svg";
 import googleLogo from "./assets/google-logo.svg";
-import {
-  getSession,
-  signInWithGithub,
-  signOut,
-  getRecords,
-  createRecord,
-  deleteRecord,
-  signInWithGoogle,
-} from "../../backend/supabase.js";
-
-type PageRecord = {
-  id: string | number;
-  title: string | null;
-  body: string | null;
-};
+import { getSession, signInWithGithub, signInWithGoogle, signOut } from "./auth";
+import { createRecord, deleteRecord, getRecords } from "./api";
+import type { PostRecord } from "./api";
 
 const googleSignInButton = document.querySelector<HTMLButtonElement>("#google_sign_in_btn");
 const githubSignInButton = document.querySelector<HTMLButtonElement>("#github_sign_in_btn");
@@ -71,7 +59,7 @@ async function checkLogin(): Promise<void> {
   }
 }
 
-function createRecordElement(record: PageRecord, canDelete: boolean): HTMLElement {
+function createRecordElement(record: PostRecord, canDelete: boolean): HTMLElement {
   const wrapper = document.createElement("article");
   wrapper.className = "record";
 
@@ -121,7 +109,7 @@ async function refreshHistory(): Promise<void> {
       throw error;
     }
 
-    const safeRecords = (records || []) as PageRecord[];
+    const safeRecords = (records || []) as PostRecord[];
     const canDelete = session !== null;
 
     if (safeRecords.length === 0) {
