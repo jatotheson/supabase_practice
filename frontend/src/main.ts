@@ -2,7 +2,7 @@ import "./app.css";
 import githubLogo from "./assets/github-logo.svg";
 import googleLogo from "./assets/google-logo.svg";
 import { getSession, signInWithGithub, signInWithGoogle, signOut } from "./auth";
-import { createRecord, deleteRecord, getRecords } from "./api";
+import { createRecord, deleteRecord, getRecords, uploadImage } from "./api";
 import type { PostRecord } from "./api";
 
 const googleSignInButton = document.querySelector<HTMLButtonElement>("#google_sign_in_btn");
@@ -14,8 +14,19 @@ const createButton = document.querySelector<HTMLInputElement>("#create_btn");
 const createForm = document.querySelector<HTMLFormElement>("#create_form");
 const createTitleInput = document.querySelector<HTMLInputElement>("#create_title");
 const createBodyInput = document.querySelector<HTMLTextAreaElement>("#create_body");
+const createImagesInput = document.querySelector<HTMLInputElement>("#create_images");
+const createImagesPreview = document.querySelector<HTMLDivElement>("#create_images_preview");
 const historyEl = document.querySelector<HTMLDivElement>("#history");
 const statusEl = document.querySelector<HTMLParagraphElement>("#status");
+let imagePreviewUrls: string[] = [];
+let selectedImageFiles: File[] = [];
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 
 function setStatus(message: string, isError = false): void {
   if (!statusEl) {
@@ -39,6 +50,89 @@ function setCreateFormVisibility(show: boolean): void {
   createForm.hidden = !show;
 }
 
+function clearImagePreviews(): void {
+  imagePreviewUrls.forEach((url) => {
+    URL.revokeObjectURL(url);
+  });
+  imagePreviewUrls = [];
+
+  if (createImagesPreview) {
+    createImagesPreview.replaceChildren();
+    createImagesPreview.hidden = true;
+  }
+}
+
+function syncSelectedImagesInput(): void {
+  if (!createImagesInput) {
+    return;
+  }
+
+  try {
+    const dataTransfer = new DataTransfer();
+    selectedImageFiles.forEach((file) => {
+      dataTransfer.items.add(file);
+    });
+    createImagesInput.files = dataTransfer.files;
+  } catch {
+    // Ignore if the browser does not allow assigning FileList.
+  }
+}
+
+function getFileKey(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function isAllowedImageFile(file: File): boolean {
+  return ALLOWED_IMAGE_MIME_TYPES.has((file.type || "").toLowerCase());
+}
+
+function renderImagePreviews(): void {
+  clearImagePreviews();
+
+  if (!createImagesInput || !createImagesPreview) {
+    return;
+  }
+
+  if (selectedImageFiles.length === 0) {
+    return;
+  }
+
+  selectedImageFiles.forEach((file, index) => {
+    const previewUrl = URL.createObjectURL(file);
+    imagePreviewUrls.push(previewUrl);
+
+    const card = document.createElement("figure");
+    card.className = "image-preview-item";
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "image-preview-remove";
+    removeButton.setAttribute("aria-label", `Remove ${file.name}`);
+    removeButton.textContent = "X";
+    removeButton.addEventListener("click", () => {
+      selectedImageFiles.splice(index, 1);
+      syncSelectedImagesInput();
+      renderImagePreviews();
+    });
+    card.appendChild(removeButton);
+
+    const image = document.createElement("img");
+    image.src = previewUrl;
+    image.alt = file.name;
+    image.loading = "lazy";
+    card.appendChild(image);
+
+    const caption = document.createElement("figcaption");
+    caption.className = "image-preview-name";
+    caption.textContent = file.name;
+    card.appendChild(caption);
+
+    createImagesPreview.appendChild(card);
+  });
+
+  createImagesPreview.hidden = false;
+}
+
 function resetCreateForm(): void {
   if (createTitleInput) {
     createTitleInput.value = "";
@@ -46,6 +140,11 @@ function resetCreateForm(): void {
   if (createBodyInput) {
     createBodyInput.value = "";
   }
+  if (createImagesInput) {
+    createImagesInput.value = "";
+  }
+  selectedImageFiles = [];
+  clearImagePreviews();
 }
 
 async function checkLogin(): Promise<void> {
@@ -170,6 +269,36 @@ createButton?.addEventListener("click", () => {
   createTitleInput?.focus();
 });
 
+createImagesInput?.addEventListener("change", () => {
+  const newFiles = Array.from(createImagesInput.files || []);
+  if (newFiles.length === 0) {
+    return;
+  }
+
+  const validNewFiles = newFiles.filter((file) => isAllowedImageFile(file));
+  const invalidNewFiles = newFiles.filter((file) => !isAllowedImageFile(file));
+
+  const existingKeys = new Set(selectedImageFiles.map((file) => getFileKey(file)));
+  validNewFiles.forEach((file) => {
+    const key = getFileKey(file);
+    if (!existingKeys.has(key)) {
+      selectedImageFiles.push(file);
+      existingKeys.add(key);
+    }
+  });
+
+  if (invalidNewFiles.length > 0) {
+    const invalidNames = invalidNewFiles.map((file) => file.name).join(", ");
+    setStatus(
+      `Ignored unsupported image file(s): ${invalidNames}. Allowed: jpeg, png, webp, gif.`,
+      true,
+    );
+  }
+
+  syncSelectedImagesInput();
+  renderImagePreviews();
+});
+
 createForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -181,7 +310,32 @@ createForm?.addEventListener("submit", async (event) => {
   }
 
   try {
-    const { error } = await createRecord(cleanTitle, cleanBody);
+    const selectedImages = [...selectedImageFiles];
+    let finalBody = cleanBody;
+
+    if (selectedImages.length > 0) {
+      setStatus(`Uploading ${selectedImages.length} image(s)...`);
+      const uploadFolder = `posts/${Date.now()}`;
+      const uploadResults = await Promise.all(
+        selectedImages.map((file) => uploadImage(file, uploadFolder)),
+      );
+
+      const firstUploadError = uploadResults.find((result) => result.error)?.error;
+      if (firstUploadError) {
+        setStatus(`Image upload failed: ${firstUploadError.message}`, true);
+        return;
+      }
+
+      const imageUrls = uploadResults
+        .map((result) => result.data?.url || null)
+        .filter((url): url is string => Boolean(url));
+
+      if (imageUrls.length > 0) {
+        finalBody = `${cleanBody}\n\nAttached Images:\n${imageUrls.join("\n")}`;
+      }
+    }
+
+    const { error } = await createRecord(cleanTitle, finalBody);
     if (error) {
       setStatus(`Create failed: ${error.message}`, true);
       return;
