@@ -1,16 +1,26 @@
 import { Router } from "express";
 import { requireUser } from "../lib/auth.js";
 import { sendError } from "../lib/http.js";
+import { logInfo } from "../lib/logger.js";
 import { createPost, deletePost, getPosts } from "../supabase.js";
 
 const postRoutes = Router();
 
-postRoutes.get("/posts", async (_req, res) => {
+postRoutes.get("/posts", async (req, res) => {
   const { data, error } = await getPosts();
   if (error) {
-    sendError(res, error);
+    sendError(res, error, 500, {
+      requestId: req.requestId,
+      method: req.method,
+      path: req.originalUrl,
+    });
     return;
   }
+
+  logInfo("posts", "list_success", {
+    requestId: req.requestId,
+    count: Array.isArray(data) ? data.length : 0,
+  });
   res.json({ data });
 });
 
@@ -30,10 +40,20 @@ postRoutes.post("/posts", async (req, res) => {
 
   const { data, error } = await createPost(title, body, user.id);
   if (error) {
-    sendError(res, error);
+    sendError(res, error, 500, {
+      requestId: req.requestId,
+      method: req.method,
+      path: req.originalUrl,
+      userId: user.id,
+    });
     return;
   }
 
+  logInfo("posts", "create_success", {
+    requestId: req.requestId,
+    userId: user.id,
+    postId: data?.id ?? null,
+  });
   res.status(201).json({ data });
 });
 
@@ -51,10 +71,21 @@ postRoutes.delete("/posts/:id", async (req, res) => {
 
   const { error } = await deletePost(id, user.id);
   if (error) {
-    sendError(res, error);
+    sendError(res, error, 500, {
+      requestId: req.requestId,
+      method: req.method,
+      path: req.originalUrl,
+      userId: user.id,
+      postId: id,
+    });
     return;
   }
 
+  logInfo("posts", "delete_success", {
+    requestId: req.requestId,
+    userId: user.id,
+    postId: id,
+  });
   res.json({ data: { success: true } });
 });
 
