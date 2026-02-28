@@ -1,8 +1,44 @@
-import { client, POSTS_TABLE } from "./client.js";
+import { client, POSTS_TABLE, USERS_TABLE } from "./client.js";
 
 export async function getPosts() {
-  const { data, error } = await client.from(POSTS_TABLE).select("*").order("post_id", { ascending: false });
-  return { data, error };
+  const { data: posts, error } = await client.from(POSTS_TABLE).select("*").order("post_id", { ascending: false });
+  if (error) {
+    return { data: null, error };
+  }
+
+  const safePosts = posts || [];
+  if (safePosts.length === 0) {
+    return { data: safePosts, error: null };
+  }
+
+  const userIds = [...new Set(safePosts.map((post) => post.user_id).filter(Boolean))];
+  if (userIds.length === 0) {
+    return {
+      data: safePosts.map((post) => ({ ...post, user_name: null })),
+      error: null,
+    };
+  }
+
+  const { data: users, error: usersError } = await client
+    .from(USERS_TABLE)
+    .select("user_id, user_name")
+    .in("user_id", userIds);
+
+  if (usersError) {
+    return {
+      data: safePosts.map((post) => ({ ...post, user_name: null })),
+      error: null,
+    };
+  }
+
+  const userNameById = new Map((users || []).map((user) => [user.user_id, user.user_name]));
+  return {
+    data: safePosts.map((post) => ({
+      ...post,
+      user_name: userNameById.get(post.user_id) ?? null,
+    })),
+    error: null,
+  };
 }
 
 export async function createPost(title, body, userId) {

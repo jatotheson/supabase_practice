@@ -5,7 +5,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export const POSTS_TABLE = process.env.SUPABASE_POSTS_TABLE || "posts";
-export const PUBLIC_BUCKET = process.env.SUPABASE_PUBLIC_BUCKET || "post-images";
+export const USERS_TABLE = process.env.SUPABASE_USERS_TABLE || "users";
+export const PUBLIC_BUCKET = process.env.SUPABASE_PUBLIC_BUCKET || "post_images";
 
 if (!SUPABASE_URL) {
   throw new Error("Missing SUPABASE_URL in backend environment.");

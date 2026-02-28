@@ -15,6 +15,7 @@ const openapi = {
     { name: "Health" },
     { name: "Posts" },
     { name: "Images" },
+    { name: "Users" },
   ],
   components: {
     securitySchemes: {
@@ -32,6 +33,7 @@ const openapi = {
           title: { type: "string", example: "My first post" },
           body: { type: "string", example: "Hello from API" },
           user_id: { type: "string", example: "ba3f5f4d-2222-4444-9999-f3332b57838f" },
+          user_name: { type: "string", nullable: true, example: "jason" },
         },
       },
       ImageItem: {
@@ -40,6 +42,14 @@ const openapi = {
           name: { type: "string", example: "1700000000-sample.png" },
           path: { type: "string", example: "uploads/1700000000-sample.png" },
           url: { type: "string", example: "https://project.supabase.co/storage/v1/object/public/post-images/uploads/1700000000-sample.png" },
+        },
+      },
+      UserRow: {
+        type: "object",
+        properties: {
+          user_id: { type: "string", example: "ba3f5f4d-2222-4444-9999-f3332b57838f" },
+          user_name: { type: "string", nullable: true, example: "jason" },
+          created_at: { type: "string", format: "date-time", example: "2026-02-28T00:00:00.000Z" },
         },
       },
       ErrorResponse: {
@@ -287,6 +297,36 @@ const openapi = {
           },
           500: {
             description: "Server error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/users/sync": {
+      post: {
+        tags: ["Users"],
+        summary: "Ensure current authenticated user exists in users table",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: "User row exists or created",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    data: { $ref: "#/components/schemas/UserRow" },
+                  },
+                },
+              },
+            },
+          },
+          401: {
+            description: "Unauthorized",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" },

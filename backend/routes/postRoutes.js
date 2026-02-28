@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireUser } from "../lib/auth.js";
 import { sendError } from "../lib/http.js";
 import { logInfo } from "../lib/logger.js";
-import { createPost, deletePost, getPosts } from "../supabase.js";
+import { createPost, deletePost, ensureUserRow, getPosts } from "../supabase.js";
 
 const postRoutes = Router();
 
@@ -35,6 +35,17 @@ postRoutes.post("/posts", async (req, res) => {
 
   if (!title || !body) {
     res.status(400).json({ error: "Title and body are required." });
+    return;
+  }
+
+  const { error: userSyncError } = await ensureUserRow(user.id);
+  if (userSyncError) {
+    sendError(res, userSyncError, 500, {
+      requestId: req.requestId,
+      method: req.method,
+      path: req.originalUrl,
+      userId: user.id,
+    });
     return;
   }
 

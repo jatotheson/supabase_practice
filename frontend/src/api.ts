@@ -7,6 +7,9 @@ export type ApiResult<T> = {
 
 export type PostRecord = {
   post_id: string | number;
+  user_id: string | null;
+  user_name: string | null;
+  created_at: string | null;
   title: string | null;
   body: string | null;
 };
@@ -15,6 +18,12 @@ export type UploadedImage = {
   name?: string;
   path: string;
   url: string;
+};
+
+export type UserRecord = {
+  user_id: string;
+  user_name: string | null;
+  created_at: string;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
@@ -90,4 +99,10 @@ export async function uploadImage(file: File, folder = "uploads") {
 export async function listImages(prefix = "") {
   const query = prefix ? `?prefix=${encodeURIComponent(prefix)}` : "";
   return request<UploadedImage[]>(`/images${query}`);
+}
+
+export async function syncUserRecord() {
+  return request<UserRecord>("/users/sync", {
+    method: "POST",
+  });
 }

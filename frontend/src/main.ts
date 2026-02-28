@@ -2,7 +2,7 @@ import "./app.css";
 import githubLogo from "./assets/github-logo.svg";
 import googleLogo from "./assets/google-logo.svg";
 import { getSession, signInWithGithub, signInWithGoogle, signOut } from "./auth";
-import { createRecord, deleteRecord, getRecords, uploadImage } from "./api";
+import { createRecord, deleteRecord, getRecords, syncUserRecord, uploadImage } from "./api";
 import type { PostRecord } from "./api";
 
 const googleSignInButton = document.querySelector<HTMLButtonElement>("#google_sign_in_btn");
@@ -20,6 +20,7 @@ const historyEl = document.querySelector<HTMLDivElement>("#history");
 const statusEl = document.querySelector<HTMLParagraphElement>("#status");
 let imagePreviewUrls: string[] = [];
 let selectedImageFiles: File[] = [];
+let lastSyncedUserId: string | null = null;
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/jpg",
@@ -41,6 +42,28 @@ function formatError(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function formatPostCreatedAt(value: string | null | undefined): string {
+  if (!value) {
+    return "(unknown time)";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "(unknown time)";
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  let hours = parsed.getHours();
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+  const meridiem = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  const hourText = String(hours).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hourText}-${minutes} ${meridiem}`;
 }
 
 function setCreateFormVisibility(show: boolean): void {
@@ -150,6 +173,21 @@ function resetCreateForm(): void {
 async function checkLogin(): Promise<void> {
   try {
     const session = await getSession();
+    const currentUserId = session?.user?.id || null;
+
+    if (session && currentUserId && lastSyncedUserId !== currentUserId) {
+      const { error } = await syncUserRecord();
+      if (error) {
+        setStatus(`User sync failed: ${error.message}`, true);
+      } else {
+        lastSyncedUserId = currentUserId;
+      }
+    }
+
+    if (!session) {
+      lastSyncedUserId = null;
+    }
+
     if (googleSignInButton) googleSignInButton.style.display = session ? "none" : "inline-flex";
     if (githubSignInButton) githubSignInButton.style.display = session ? "none" : "inline-flex";
     if (logoutButton) logoutButton.style.display = session ? "inline-block" : "none";
@@ -162,9 +200,30 @@ function createRecordElement(record: PostRecord, canDelete: boolean): HTMLElemen
   const wrapper = document.createElement("article");
   wrapper.className = "record";
 
+  const header = document.createElement("div");
+  header.className = "record-header";
+
   const title = document.createElement("h2");
   title.textContent = record.title || "(untitled)";
-  wrapper.appendChild(title);
+  header.appendChild(title);
+
+  const meta = document.createElement("div");
+  meta.className = "record-meta";
+
+  const userId = document.createElement("span");
+  userId.className = "record-user-id";
+  const preferredUserName = typeof record.user_name === "string" ? record.user_name.trim() : "";
+  userId.textContent = preferredUserName || (record.user_id ? String(record.user_id) : "(unknown user)");
+  meta.appendChild(userId);
+
+  const createdAt = document.createElement("span");
+  createdAt.className = "record-created-at";
+  createdAt.textContent = formatPostCreatedAt(record.created_at);
+  meta.appendChild(createdAt);
+
+  header.appendChild(meta);
+
+  wrapper.appendChild(header);
 
   const body = document.createElement("p");
   body.textContent = record.body || "(no body)";
