@@ -52,31 +52,31 @@ postRoutes.post("/posts", async (req, res) => {
   logInfo("posts", "create_success", {
     requestId: req.requestId,
     userId: user.id,
-    postId: data?.id ?? null,
+    postId: data?.post_id ?? null,
   });
   res.status(201).json({ data });
 });
 
-postRoutes.delete("/posts/:id", async (req, res) => {
+postRoutes.delete("/posts/:postId", async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) {
     return;
   }
 
-  const id = req.params.id;
-  if (!id) {
+  const postId = req.params.postId;
+  if (!postId) {
     res.status(400).json({ error: "Post id is required." });
     return;
   }
 
-  const { error } = await deletePost(id, user.id);
+  const { error } = await deletePost(postId, user.id);
   if (error) {
     sendError(res, error, 500, {
       requestId: req.requestId,
       method: req.method,
       path: req.originalUrl,
       userId: user.id,
-      postId: id,
+      postId,
     });
     return;
   }
@@ -84,7 +84,7 @@ postRoutes.delete("/posts/:id", async (req, res) => {
   logInfo("posts", "delete_success", {
     requestId: req.requestId,
     userId: user.id,
-    postId: id,
+    postId,
   });
   res.json({ data: { success: true } });
 });

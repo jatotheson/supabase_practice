@@ -28,7 +28,7 @@ const openapi = {
       Post: {
         type: "object",
         properties: {
-          id: { type: "string", example: "1" },
+          post_id: { type: "string", example: "1" },
           title: { type: "string", example: "My first post" },
           body: { type: "string", example: "Hello from API" },
           user_id: { type: "string", example: "ba3f5f4d-2222-4444-9999-f3332b57838f" },
@@ -160,18 +160,18 @@ const openapi = {
         },
       },
     },
-    "/api/posts/{id}": {
+    "/api/posts/{post_id}": {
       delete: {
         tags: ["Posts"],
         summary: "Delete post",
         security: [{ bearerAuth: [] }],
         parameters: [
           {
-            name: "id",
+            name: "post_id",
             in: "path",
             required: true,
             schema: { type: "string" },
-            description: "Post id",
+            description: "Post identifier",
           },
         ],
         responses: {

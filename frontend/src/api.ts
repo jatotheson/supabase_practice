@@ -6,7 +6,7 @@ export type ApiResult<T> = {
 };
 
 export type PostRecord = {
-  id: string | number;
+  post_id: string | number;
   title: string | null;
   body: string | null;
 };

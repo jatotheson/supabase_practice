@@ -177,7 +177,7 @@ function createRecordElement(record: PostRecord, canDelete: boolean): HTMLElemen
     deleteButton.className = "delete-btn";
     deleteButton.addEventListener("click", async () => {
       try {
-        const { error } = await deleteRecord(String(record.id));
+        const { error } = await deleteRecord(String(record.post_id));
         if (error) {
           setStatus(`Delete failed: ${error.message}`, true);
           return;
