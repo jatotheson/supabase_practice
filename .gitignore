@@ -211,6 +211,7 @@ __marimo__/
 .DS_Store
 node_modules/
 dist/
+*.zip
 
 # Keep backend helper modules trackable
 !backend/lib
