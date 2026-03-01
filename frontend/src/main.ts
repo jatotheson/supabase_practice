@@ -66,6 +66,82 @@ function formatPostCreatedAt(value: string | null | undefined): string {
   return `${year}-${month}-${day} ${hourText}-${minutes} ${meridiem}`;
 }
 
+function toHttpUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function isLikelyImageUrl(urlValue: string): boolean {
+  try {
+    const parsed = new URL(urlValue);
+    const lowerPath = parsed.pathname.toLowerCase();
+    return /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/.test(lowerPath);
+  } catch {
+    return false;
+  }
+}
+
+function parseRecordBody(bodyValue: string | null | undefined): { text: string; imageUrls: string[] } {
+  const raw = (bodyValue || "").trim();
+  if (!raw) {
+    return { text: "", imageUrls: [] };
+  }
+
+  const lines = raw.split(/\r?\n/);
+  const markerIndex = lines.findIndex((line) => line.trim().toLowerCase() === "attached images:");
+  const imageCandidateLines = markerIndex >= 0 ? lines.slice(markerIndex + 1) : lines;
+  const textLines = markerIndex >= 0 ? lines.slice(0, markerIndex) : [];
+
+  const imageUrls: string[] = [];
+  const seen = new Set<string>();
+
+  imageCandidateLines.forEach((line) => {
+    const normalized = toHttpUrl(line);
+    if (!normalized || !isLikelyImageUrl(normalized) || seen.has(normalized)) {
+      if (markerIndex < 0) {
+        textLines.push(line);
+      }
+      return;
+    }
+    seen.add(normalized);
+    imageUrls.push(normalized);
+  });
+
+  return {
+    text: textLines.join("\n").trim(),
+    imageUrls,
+  };
+}
+
+function getRecordImageUrls(record: PostRecord): string[] {
+  const imageRecords = Array.isArray(record.images) ? record.images : [];
+  if (imageRecords.length > 0) {
+    const safeImages = [...imageRecords].sort((a, b) => {
+      const aOrder = typeof a.sort_order === "number" ? a.sort_order : Number.MAX_SAFE_INTEGER;
+      const bOrder = typeof b.sort_order === "number" ? b.sort_order : Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder;
+    });
+
+    return safeImages
+      .map((imageRecord) => toHttpUrl(imageRecord.url))
+      .filter((url): url is string => Boolean(url));
+  }
+
+  return parseRecordBody(record.body).imageUrls;
+}
+
 function setCreateFormVisibility(show: boolean): void {
   if (!createForm) {
     return;
@@ -225,9 +301,42 @@ function createRecordElement(record: PostRecord, canDelete: boolean): HTMLElemen
 
   wrapper.appendChild(header);
 
-  const body = document.createElement("p");
-  body.textContent = record.body || "(no body)";
-  wrapper.appendChild(body);
+  const parsedBody = parseRecordBody(record.body);
+  const imageUrls = getRecordImageUrls(record);
+  const displayBodyText =
+    Array.isArray(record.images) && record.images.length > 0 ? (record.body || "").trim() : parsedBody.text;
+
+  if (displayBodyText || imageUrls.length === 0) {
+    const body = document.createElement("p");
+    body.textContent = displayBodyText || "(no body)";
+    wrapper.appendChild(body);
+  }
+
+  if (imageUrls.length > 0) {
+    const imageGrid = document.createElement("div");
+    imageGrid.className = "record-image-grid";
+
+    imageUrls.forEach((imageUrl, index) => {
+      const link = document.createElement("a");
+      link.className = "record-image-link";
+      link.href = imageUrl;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.setAttribute("aria-label", `Open attached image ${index + 1}`);
+
+      const image = document.createElement("img");
+      image.className = "record-image";
+      image.src = imageUrl;
+      image.alt = `Attached image ${index + 1}`;
+      image.loading = "lazy";
+      image.decoding = "async";
+
+      link.appendChild(image);
+      imageGrid.appendChild(link);
+    });
+
+    wrapper.appendChild(imageGrid);
+  }
 
   if (canDelete) {
     const deleteButton = document.createElement("input");
@@ -370,35 +479,41 @@ createForm?.addEventListener("submit", async (event) => {
 
   try {
     const selectedImages = [...selectedImageFiles];
-    let finalBody = cleanBody;
+    const { data: createdPost, error: createError } = await createRecord(cleanTitle, cleanBody);
+    if (createError) {
+      setStatus(`Create failed: ${createError.message}`, true);
+      return;
+    }
+
+    const createdPostId = createdPost?.post_id;
+    if (!createdPostId) {
+      setStatus("Create failed: missing created post id.", true);
+      return;
+    }
 
     if (selectedImages.length > 0) {
       setStatus(`Uploading ${selectedImages.length} image(s)...`);
-      const uploadFolder = `posts/${Date.now()}`;
       const uploadResults = await Promise.all(
-        selectedImages.map((file) => uploadImage(file, uploadFolder)),
+        selectedImages.map((file, index) => uploadImage(file, createdPostId, index)),
       );
 
       const firstUploadError = uploadResults.find((result) => result.error)?.error;
       if (firstUploadError) {
-        setStatus(`Image upload failed: ${firstUploadError.message}`, true);
+        const { error: rollbackError } = await deleteRecord(String(createdPostId));
+        if (rollbackError) {
+          setStatus(
+            `Create failed: ${firstUploadError.message}. Rollback failed: ${rollbackError.message}`,
+            true,
+          );
+          return;
+        }
+
+        setStatus(`Create failed: ${firstUploadError.message}`, true);
+        await refreshHistory();
         return;
       }
-
-      const imageUrls = uploadResults
-        .map((result) => result.data?.url || null)
-        .filter((url): url is string => Boolean(url));
-
-      if (imageUrls.length > 0) {
-        finalBody = `${cleanBody}\n\nAttached Images:\n${imageUrls.join("\n")}`;
-      }
     }
 
-    const { error } = await createRecord(cleanTitle, finalBody);
-    if (error) {
-      setStatus(`Create failed: ${error.message}`, true);
-      return;
-    }
     setStatus("Record created.");
     resetCreateForm();
     setCreateFormVisibility(false);

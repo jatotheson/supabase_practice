@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { client, PUBLIC_BUCKET } from "./client.js";
+import { client, POST_IMAGES_TABLE, PUBLIC_BUCKET } from "./client.js";
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
@@ -27,6 +27,14 @@ function toPublicUrl(objectPath) {
 
 function normalizeUploadedMimeType(uploadedMimeType) {
   return uploadedMimeType === "image/jpg" ? "image/jpeg" : uploadedMimeType;
+}
+
+function normalizeSortOrder(value, fallback = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
+    return fallback;
+  }
+  return numeric;
 }
 
 function isMimeEquivalent(uploadedMimeType, detectedMimeType) {
@@ -116,7 +124,7 @@ export async function uploadPublicImage(file, folder = "uploads") {
   const objectPath = buildObjectPath(file.originalname || "", folder);
   const { error } = await client.storage.from(PUBLIC_BUCKET).upload(objectPath, file.buffer, {
     contentType: detectedMimeType,
-    cacheControl: "3600",
+    cacheControl: "60",   // image cached for 1 min on CDN and browsers
     upsert: false,
   });
 
@@ -131,6 +139,69 @@ export async function uploadPublicImage(file, folder = "uploads") {
     },
     error: null,
   };
+}
+
+export async function uploadPostImage(file, postId, sortOrder = 0) {
+  if (!postId) {
+    return { data: null, error: new Error("Post id is required for image upload.") };
+  }
+
+  const normalizedSortOrder = normalizeSortOrder(sortOrder, 0);
+  const uploadFolder = `posts/${postId}`;
+  const { data: uploadData, error: uploadError } = await uploadPublicImage(file, uploadFolder);
+  if (uploadError || !uploadData?.path) {
+    return { data: null, error: uploadError || new Error("Image upload failed.") };
+  }
+
+  const { data: imageRow, error: imageRowError } = await client
+    .from(POST_IMAGES_TABLE)
+    .insert([
+      {
+        post_id: postId,
+        storage_path: uploadData.path,
+        sort_order: normalizedSortOrder,
+      },
+    ])
+    .select("image_id, post_id, storage_path, sort_order")
+    .single();
+
+  if (imageRowError) {
+    await client.storage.from(PUBLIC_BUCKET).remove([uploadData.path]);
+    return { data: null, error: imageRowError };
+  }
+
+  return {
+    data: {
+      ...imageRow,
+      url: toPublicUrl(imageRow.storage_path),
+    },
+    error: null,
+  };
+}
+
+export async function getPostImagesByPostIds(postIds) {
+  const safePostIds = [...new Set((postIds || []).filter(Boolean))];
+  if (safePostIds.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await client
+    .from(POST_IMAGES_TABLE)
+    .select("image_id, post_id, storage_path, sort_order")
+    .in("post_id", safePostIds)
+    .order("sort_order", { ascending: true })
+    .order("image_id", { ascending: true });
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  const items = (data || []).map((row) => ({
+    ...row,
+    url: toPublicUrl(row.storage_path),
+  }));
+
+  return { data: items, error: null };
 }
 
 export async function listPublicImages(prefix = "") {

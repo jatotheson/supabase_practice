@@ -34,6 +34,20 @@ const openapi = {
           body: { type: "string", example: "Hello from API" },
           user_id: { type: "string", example: "ba3f5f4d-2222-4444-9999-f3332b57838f" },
           user_name: { type: "string", nullable: true, example: "jason" },
+          images: {
+            type: "array",
+            items: { $ref: "#/components/schemas/PostImage" },
+          },
+        },
+      },
+      PostImage: {
+        type: "object",
+        properties: {
+          image_id: { type: "string", format: "uuid" },
+          post_id: { type: "string", example: "1" },
+          storage_path: { type: "string", example: "posts/1/1700000000-sample.png" },
+          sort_order: { type: "integer", example: 0 },
+          url: { type: "string", example: "https://project.supabase.co/storage/v1/object/public/post_images_bucket/posts/1/1700000000-sample.png" },
         },
       },
       ImageItem: {
@@ -217,23 +231,30 @@ const openapi = {
     "/api/images/upload": {
       post: {
         tags: ["Images"],
-        summary: "Upload image to public bucket",
+        summary: "Upload image and attach to a post",
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
             "multipart/form-data": {
               schema: {
                 type: "object",
-                required: ["image"],
+                required: ["image", "post_id"],
                 properties: {
                   image: {
                     type: "string",
                     format: "binary",
                     description: "Image file",
                   },
-                  folder: {
+                  post_id: {
                     type: "string",
-                    example: "uploads",
+                    example: "1",
+                    description: "Post identifier to attach image to",
+                  },
+                  sort_order: {
+                    type: "integer",
+                    example: 0,
+                    description: "Render order of this image within the post",
                   },
                 },
               },
@@ -248,7 +269,7 @@ const openapi = {
                 schema: {
                   type: "object",
                   properties: {
-                    data: { $ref: "#/components/schemas/ImageItem" },
+                    data: { $ref: "#/components/schemas/PostImage" },
                   },
                 },
               },
@@ -256,6 +277,30 @@ const openapi = {
           },
           400: {
             description: "Upload error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          401: {
+            description: "Unauthorized",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          403: {
+            description: "Forbidden for another user's post",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+          404: {
+            description: "Post not found",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" },

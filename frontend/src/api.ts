@@ -12,11 +12,20 @@ export type PostRecord = {
   created_at: string | null;
   title: string | null;
   body: string | null;
+  images?: PostImageRecord[] | null;
 };
 
 export type UploadedImage = {
   name?: string;
   path: string;
+  url: string;
+};
+
+export type PostImageRecord = {
+  image_id: string;
+  post_id: string | number;
+  storage_path: string;
+  sort_order: number | null;
   url: string;
 };
 
@@ -86,11 +95,12 @@ export async function deleteRecord(id: string) {
   });
 }
 
-export async function uploadImage(file: File, folder = "uploads") {
+export async function uploadImage(file: File, postId: string | number, sortOrder: number) {
   const formData = new FormData();
   formData.append("image", file);
-  formData.append("folder", folder);
-  return request<UploadedImage>("/images/upload", {
+  formData.append("post_id", String(postId));
+  formData.append("sort_order", String(sortOrder));
+  return request<PostImageRecord>("/images/upload", {
     method: "POST",
     body: formData,
   });
