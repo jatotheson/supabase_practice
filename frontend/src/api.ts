@@ -35,7 +35,9 @@ export type UserRecord = {
   created_at: string;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+const API_BASE = (
+  import.meta.env.VITE_API_BASE || "https://cram3kv5ns.us-east-2.awsapprunner.com/api"
+).replace(/\/+$/, "");
 
 function toError(value: unknown): Error {
   if (value instanceof Error) {
