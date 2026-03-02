@@ -8,6 +8,16 @@ const SUPABASE_PUBLIC_ANON_KEY =
 
 const client = createClient(SUPABASE_URL, SUPABASE_PUBLIC_ANON_KEY);
 
+declare global {
+  interface Window {
+    supabase?: typeof client;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.supabase = client;
+}
+
 function getRedirectUrl() {
   if (typeof window === "undefined") {
     return undefined;

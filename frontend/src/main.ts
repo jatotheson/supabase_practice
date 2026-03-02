@@ -523,6 +523,16 @@ createForm?.addEventListener("submit", async (event) => {
   }
 });
 
+async function logSessionForTesting(): Promise<void> {
+  if (typeof window === "undefined" || !window.supabase) {
+    return;
+  }
+
+  const { data, error } = await window.supabase.auth.getSession();
+  console.log("SUPBASE TOKEN:\n" + data.session?.access_token + "\n", error);
+}
+
+void logSessionForTesting();
 void checkLogin();
 void refreshHistory();
 
