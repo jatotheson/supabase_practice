@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: process.env.VITE_API_PROXY_TARGET || 'https://cram3kv5ns.us-east-2.awsapprunner.com',
+        target: process.env.VITE_API_PROXY_TARGET || 'https://fkgnhbfyfu.us-east-2.awsapprunner.com',
         changeOrigin: true,
       },
     },
