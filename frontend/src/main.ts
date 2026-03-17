@@ -1,9 +1,31 @@
 import "./app.css";
 import githubLogo from "./assets/github-logo.svg";
 import googleLogo from "./assets/google-logo.svg";
-import { getSession, signInWithGithub, signInWithGoogle, signOut } from "./auth";
-import { createRecord, deleteRecord, getRecords, syncUserRecord, uploadImage } from "./api";
-import type { PostRecord } from "./api";
+import {
+  getCachedSession,
+  getSession,
+  onAuthStateChange,
+  signInWithGithub,
+  signInWithGoogle,
+  signOut,
+} from "./auth";
+import {
+  createRecord,
+  createTempUpload,
+  deleteRecord,
+  deleteTempUpload,
+  getRecords,
+  syncUserRecord,
+  type CreatePostPayload,
+  type PostFilters,
+  type PostRecord,
+  type TempUploadRecord,
+} from "./api";
+
+type TempUploadItem = TempUploadRecord & {
+  file_name: string;
+  local_preview_url: string | null;
+};
 
 const googleSignInButton = document.querySelector<HTMLButtonElement>("#google_sign_in_btn");
 const githubSignInButton = document.querySelector<HTMLButtonElement>("#github_sign_in_btn");
@@ -14,19 +36,59 @@ const createButton = document.querySelector<HTMLInputElement>("#create_btn");
 const createForm = document.querySelector<HTMLFormElement>("#create_form");
 const createTitleInput = document.querySelector<HTMLInputElement>("#create_title");
 const createBodyInput = document.querySelector<HTMLTextAreaElement>("#create_body");
+const createPostTypeInput = document.querySelector<HTMLSelectElement>("#create_post_type");
+const createTeamSizeInput = document.querySelector<HTMLInputElement>("#create_team_size");
+const createProjectDurationInput = document.querySelector<HTMLSelectElement>("#create_project_duration");
+const createRecruitmentDeadlineInput = document.querySelector<HTMLInputElement>("#create_recruitment_deadline");
+const createWorkStyleInput = document.querySelector<HTMLSelectElement>("#create_work_style");
+const createLocationStateInput = document.querySelector<HTMLInputElement>("#create_location_state");
+const createLocationCityInput = document.querySelector<HTMLInputElement>("#create_location_city");
+const createContactEmailInput = document.querySelector<HTMLInputElement>("#create_contact_email");
+const createContactDiscordInput = document.querySelector<HTMLInputElement>("#create_contact_discord");
+const createContactSlackInput = document.querySelector<HTMLInputElement>("#create_contact_slack");
+const createCommitmentLevelInput = document.querySelector<HTMLSelectElement>("#create_commitment_level");
+const createPositionCountsInput = document.querySelector<HTMLInputElement>("#create_position_counts");
+const createTechStacksInput = document.querySelector<HTMLInputElement>("#create_tech_stacks");
 const createImagesInput = document.querySelector<HTMLInputElement>("#create_images");
+const uploadTempImagesButton = document.querySelector<HTMLButtonElement>("#upload_temp_images_btn");
+const tempUploadStatusEl = document.querySelector<HTMLParagraphElement>("#temp_upload_status");
 const createImagesPreview = document.querySelector<HTMLDivElement>("#create_images_preview");
 const historyEl = document.querySelector<HTMLDivElement>("#history");
 const statusEl = document.querySelector<HTMLParagraphElement>("#status");
-let imagePreviewUrls: string[] = [];
-let selectedImageFiles: File[] = [];
+const filterIndicatorEl = document.querySelector<HTMLParagraphElement>("#filter_indicator");
+const applyFiltersButton = document.querySelector<HTMLButtonElement>("#apply_filters_btn");
+const resetFiltersButton = document.querySelector<HTMLButtonElement>("#reset_filters_btn");
+const filterPostTypeInput = document.querySelector<HTMLSelectElement>("#filter_post_type");
+const filterTeamSizeMinInput = document.querySelector<HTMLInputElement>("#filter_team_size_min");
+const filterTeamSizeMaxInput = document.querySelector<HTMLInputElement>("#filter_team_size_max");
+const filterProjectDurationInput = document.querySelector<HTMLInputElement>("#filter_project_duration");
+const filterDeadlineBeforeInput = document.querySelector<HTMLInputElement>("#filter_deadline_before");
+const filterDeadlineAfterInput = document.querySelector<HTMLInputElement>("#filter_deadline_after");
+const filterWorkStyleInput = document.querySelector<HTMLInputElement>("#filter_work_style");
+const filterLocationStateInput = document.querySelector<HTMLInputElement>("#filter_location_state");
+const filterLocationCityInput = document.querySelector<HTMLInputElement>("#filter_location_city");
+const filterCommitmentLevelInput = document.querySelector<HTMLInputElement>("#filter_commitment_level");
+const filterBookmarkedInput = document.querySelector<HTMLInputElement>("#filter_bookmarked");
+const filterPositionsInput = document.querySelector<HTMLInputElement>("#filter_positions");
+const filterPositionsMatchInput = document.querySelector<HTMLSelectElement>("#filter_positions_match");
+const filterTechStacksInput = document.querySelector<HTMLInputElement>("#filter_tech_stacks");
+const filterTechStacksMatchInput = document.querySelector<HTMLSelectElement>("#filter_tech_stacks_match");
+const filterLimitInput = document.querySelector<HTMLInputElement>("#filter_limit");
+const filterOffsetInput = document.querySelector<HTMLInputElement>("#filter_offset");
+const filterSortInput = document.querySelector<HTMLSelectElement>("#filter_sort");
+const filterOrderInput = document.querySelector<HTMLSelectElement>("#filter_order");
+
 let lastSyncedUserId: string | null = null;
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
+let pendingTempImageFiles: File[] = [];
+let tempUploads: TempUploadItem[] = [];
+let appliedFilters: PostFilters = {};
+let recordsLoadRequestId = 0;
+
+const ALLOWED_TEMP_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/jpg",
   "image/png",
   "image/webp",
-  "image/gif",
 ]);
 
 function setStatus(message: string, isError = false): void {
@@ -35,6 +97,14 @@ function setStatus(message: string, isError = false): void {
   }
   statusEl.textContent = message;
   statusEl.classList.toggle("error", isError);
+}
+
+function setTempUploadStatus(message: string, isError = false): void {
+  if (!tempUploadStatusEl) {
+    return;
+  }
+  tempUploadStatusEl.textContent = message;
+  tempUploadStatusEl.classList.toggle("error", isError);
 }
 
 function formatError(error: unknown): string {
@@ -93,6 +163,67 @@ function isLikelyImageUrl(urlValue: string): boolean {
   }
 }
 
+function parseCsvValues(value: string | null | undefined): string[] {
+  return (value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseOptionalInteger(value: string | null | undefined): number | undefined {
+  const raw = (value || "").trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) ? parsed : undefined;
+}
+
+function parsePositionCounts(
+  value: string | null | undefined
+): { positionCounts: Record<string, number> | null; error: string | null } {
+  const raw = (value || "").trim();
+  if (!raw) {
+    return { positionCounts: null, error: "Position counts are required." };
+  }
+
+  const entries = raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const positionCounts: Record<string, number> = {};
+
+  for (const entry of entries) {
+    const [positionRaw, countRaw] = entry.split(":").map((item) => item.trim());
+    if (!positionRaw) {
+      return { positionCounts: null, error: `Invalid position_counts entry: "${entry}".` };
+    }
+
+    if (!countRaw) {
+      positionCounts[positionRaw] = 1;
+      continue;
+    }
+
+    const count = Number(countRaw);
+    if (!Number.isInteger(count) || count < 1) {
+      return {
+        positionCounts: null,
+        error: `Invalid count for "${positionRaw}". Use integers greater than or equal to 1.`,
+      };
+    }
+
+    positionCounts[positionRaw] = count;
+  }
+
+  if (Object.keys(positionCounts).length === 0) {
+    return { positionCounts: null, error: "Position counts are required." };
+  }
+
+  return { positionCounts, error: null };
+}
+
 function parseRecordBody(bodyValue: string | null | undefined): { text: string; imageUrls: string[] } {
   const raw = (bodyValue || "").trim();
   if (!raw) {
@@ -149,81 +280,65 @@ function setCreateFormVisibility(show: boolean): void {
   createForm.hidden = !show;
 }
 
-function clearImagePreviews(): void {
-  imagePreviewUrls.forEach((url) => {
-    URL.revokeObjectURL(url);
+function releaseTempPreviewUrls(): void {
+  tempUploads.forEach((upload) => {
+    if (upload.local_preview_url) {
+      URL.revokeObjectURL(upload.local_preview_url);
+    }
   });
-  imagePreviewUrls = [];
+}
 
-  if (createImagesPreview) {
-    createImagesPreview.replaceChildren();
+function renderTempUploadPreviews(): void {
+  if (!createImagesPreview) {
+    return;
+  }
+
+  createImagesPreview.replaceChildren();
+
+  if (tempUploads.length === 0) {
     createImagesPreview.hidden = true;
-  }
-}
-
-function syncSelectedImagesInput(): void {
-  if (!createImagesInput) {
     return;
   }
 
-  try {
-    const dataTransfer = new DataTransfer();
-    selectedImageFiles.forEach((file) => {
-      dataTransfer.items.add(file);
-    });
-    createImagesInput.files = dataTransfer.files;
-  } catch {
-    // Ignore if the browser does not allow assigning FileList.
-  }
-}
-
-function getFileKey(file: File): string {
-  return `${file.name}:${file.size}:${file.lastModified}`;
-}
-
-function isAllowedImageFile(file: File): boolean {
-  return ALLOWED_IMAGE_MIME_TYPES.has((file.type || "").toLowerCase());
-}
-
-function renderImagePreviews(): void {
-  clearImagePreviews();
-
-  if (!createImagesInput || !createImagesPreview) {
-    return;
-  }
-
-  if (selectedImageFiles.length === 0) {
-    return;
-  }
-
-  selectedImageFiles.forEach((file, index) => {
-    const previewUrl = URL.createObjectURL(file);
-    imagePreviewUrls.push(previewUrl);
-
+  tempUploads.forEach((upload) => {
     const card = document.createElement("figure");
     card.className = "image-preview-item";
 
     const removeButton = document.createElement("button");
     removeButton.type = "button";
     removeButton.className = "image-preview-remove";
-    removeButton.setAttribute("aria-label", `Remove ${file.name}`);
+    removeButton.setAttribute("aria-label", `Remove ${upload.file_name}`);
     removeButton.textContent = "X";
-    removeButton.addEventListener("click", () => {
-      selectedImageFiles.splice(index, 1);
-      syncSelectedImagesInput();
-      renderImagePreviews();
+    removeButton.addEventListener("click", async () => {
+      try {
+        const { error } = await deleteTempUpload(upload.upload_id);
+        if (error) {
+          setTempUploadStatus(`Temp image delete failed: ${error.message}`, true);
+          return;
+        }
+
+        if (upload.local_preview_url) {
+          URL.revokeObjectURL(upload.local_preview_url);
+        }
+
+        tempUploads = tempUploads.filter((item) => item.upload_id !== upload.upload_id);
+        renderTempUploadPreviews();
+        setTempUploadStatus("Temporary upload removed.");
+      } catch (error) {
+        setTempUploadStatus(`Temp image delete failed: ${formatError(error)}`, true);
+      }
     });
     card.appendChild(removeButton);
 
     const image = document.createElement("img");
-    image.src = previewUrl;
-    image.alt = file.name;
+    image.src = upload.preview_url || upload.local_preview_url || "";
+    image.alt = upload.file_name;
     image.loading = "lazy";
     card.appendChild(image);
 
     const caption = document.createElement("figcaption");
     caption.className = "image-preview-name";
-    caption.textContent = file.name;
+    caption.textContent = `${upload.file_name} (${upload.upload_id})`;
     card.appendChild(caption);
 
     createImagesPreview.appendChild(card);
@@ -233,32 +348,139 @@ function renderImagePreviews(): void {
 }
 
 function resetCreateForm(): void {
-  if (createTitleInput) {
-    createTitleInput.value = "";
+  if (createTitleInput) createTitleInput.value = "";
+  if (createBodyInput) createBodyInput.value = "";
+  if (createPostTypeInput) createPostTypeInput.value = "portfolio";
+  if (createTeamSizeInput) createTeamSizeInput.value = "1";
+  if (createProjectDurationInput) createProjectDurationInput.value = "1_3_months";
+  if (createRecruitmentDeadlineInput) createRecruitmentDeadlineInput.value = "";
+  if (createWorkStyleInput) createWorkStyleInput.value = "online";
+  if (createLocationStateInput) createLocationStateInput.value = "";
+  if (createLocationCityInput) createLocationCityInput.value = "";
+  if (createContactEmailInput) createContactEmailInput.value = "";
+  if (createContactDiscordInput) createContactDiscordInput.value = "";
+  if (createContactSlackInput) createContactSlackInput.value = "";
+  if (createCommitmentLevelInput) createCommitmentLevelInput.value = "part_time";
+  if (createPositionCountsInput) createPositionCountsInput.value = "";
+  if (createTechStacksInput) createTechStacksInput.value = "";
+  if (createImagesInput) createImagesInput.value = "";
+  pendingTempImageFiles = [];
+  releaseTempPreviewUrls();
+  tempUploads = [];
+  renderTempUploadPreviews();
+  setTempUploadStatus("");
+}
+
+function clearFilterInputs(): void {
+  if (filterPostTypeInput) filterPostTypeInput.value = "";
+  if (filterTeamSizeMinInput) filterTeamSizeMinInput.value = "";
+  if (filterTeamSizeMaxInput) filterTeamSizeMaxInput.value = "";
+  if (filterProjectDurationInput) filterProjectDurationInput.value = "";
+  if (filterDeadlineBeforeInput) filterDeadlineBeforeInput.value = "";
+  if (filterDeadlineAfterInput) filterDeadlineAfterInput.value = "";
+  if (filterWorkStyleInput) filterWorkStyleInput.value = "";
+  if (filterLocationStateInput) filterLocationStateInput.value = "";
+  if (filterLocationCityInput) filterLocationCityInput.value = "";
+  if (filterCommitmentLevelInput) filterCommitmentLevelInput.value = "";
+  if (filterBookmarkedInput) filterBookmarkedInput.checked = false;
+  if (filterPositionsInput) filterPositionsInput.value = "";
+  if (filterPositionsMatchInput) filterPositionsMatchInput.value = "";
+  if (filterTechStacksInput) filterTechStacksInput.value = "";
+  if (filterTechStacksMatchInput) filterTechStacksMatchInput.value = "";
+  if (filterLimitInput) filterLimitInput.value = "";
+  if (filterOffsetInput) filterOffsetInput.value = "";
+  if (filterSortInput) filterSortInput.value = "";
+  if (filterOrderInput) filterOrderInput.value = "";
+}
+
+function hasAppliedFilters(filters: PostFilters): boolean {
+  return Object.keys(filters).length > 0;
+}
+
+function updateFilterIndicator(): void {
+  if (!filterIndicatorEl) {
+    return;
   }
-  if (createBodyInput) {
-    createBodyInput.value = "";
+
+  filterIndicatorEl.textContent = hasAppliedFilters(appliedFilters)
+    ? "Filters applied. Showing only posts that match the current filters."
+    : "No filters applied. Showing all available posts.";
+}
+
+function collectFiltersFromInputs(): PostFilters {
+  const filters: PostFilters = {};
+
+  const postType = filterPostTypeInput?.value.trim();
+  if (postType) filters.post_type = postType;
+
+  const teamSizeMin = parseOptionalInteger(filterTeamSizeMinInput?.value);
+  if (teamSizeMin !== undefined) filters.team_size_min = teamSizeMin;
+
+  const teamSizeMax = parseOptionalInteger(filterTeamSizeMaxInput?.value);
+  if (teamSizeMax !== undefined) filters.team_size_max = teamSizeMax;
+
+  const projectDuration = parseCsvValues(filterProjectDurationInput?.value);
+  if (projectDuration.length > 0) filters.project_duration = projectDuration;
+
+  const deadlineBefore = filterDeadlineBeforeInput?.value.trim();
+  if (deadlineBefore) filters.recruitment_deadline_before = deadlineBefore;
+
+  const deadlineAfter = filterDeadlineAfterInput?.value.trim();
+  if (deadlineAfter) filters.recruitment_deadline_after = deadlineAfter;
+
+  const workStyle = parseCsvValues(filterWorkStyleInput?.value);
+  if (workStyle.length > 0) filters.work_style = workStyle;
+
+  const locationState = parseCsvValues(filterLocationStateInput?.value);
+  if (locationState.length > 0) filters.location_state = locationState;
+
+  const locationCity = filterLocationCityInput?.value.trim();
+  if (locationCity) filters.location_city = locationCity;
+
+  const commitmentLevel = parseCsvValues(filterCommitmentLevelInput?.value);
+  if (commitmentLevel.length > 0) filters.commitment_level = commitmentLevel;
+
+  if (filterBookmarkedInput?.checked) {
+    filters.bookmarked = true;
   }
-  if (createImagesInput) {
-    createImagesInput.value = "";
+
+  const positions = parseCsvValues(filterPositionsInput?.value);
+  if (positions.length > 0) {
+    filters.positions = positions;
+    const positionsMatch = filterPositionsMatchInput?.value.trim();
+    if (positionsMatch) {
+      filters.positions_match = positionsMatch;
+    }
   }
-  selectedImageFiles = [];
-  clearImagePreviews();
+
+  const techStacks = parseCsvValues(filterTechStacksInput?.value);
+  if (techStacks.length > 0) {
+    filters.tech_stacks = techStacks;
+    const techStacksMatch = filterTechStacksMatchInput?.value.trim();
+    if (techStacksMatch) {
+      filters.tech_stacks_match = techStacksMatch;
+    }
+  }
+
+  const limit = parseOptionalInteger(filterLimitInput?.value);
+  if (limit !== undefined) filters.limit = limit;
+
+  const offset = parseOptionalInteger(filterOffsetInput?.value);
+  if (offset !== undefined) filters.offset = offset;
+
+  const sort = filterSortInput?.value.trim();
+  if (sort) filters.sort = sort;
+
+  const order = filterOrderInput?.value.trim();
+  if (order) filters.order = order;
+
+  return filters;
 }
 
 async function checkLogin(): Promise<void> {
   try {
     const session = await getSession();
     const currentUserId = session?.user?.id || null;
-
-    if (session && currentUserId && lastSyncedUserId !== currentUserId) {
-      const { error } = await syncUserRecord();
-      if (error) {
-        setStatus(`User sync failed: ${error.message}`, true);
-      } else {
-        lastSyncedUserId = currentUserId;
-      }
-    }
 
     if (!session) {
       lastSyncedUserId = null;
@@ -267,6 +489,17 @@ async function checkLogin(): Promise<void> {
     if (googleSignInButton) googleSignInButton.style.display = session ? "none" : "inline-flex";
     if (githubSignInButton) githubSignInButton.style.display = session ? "none" : "inline-flex";
     if (logoutButton) logoutButton.style.display = session ? "inline-block" : "none";
+    if (filterBookmarkedInput) filterBookmarkedInput.disabled = !session;
+
+    if (session && currentUserId && lastSyncedUserId !== currentUserId) {
+      void syncUserRecord().then(({ error }) => {
+        if (error) {
+          setStatus(`User sync failed: ${error.message}`, true);
+          return;
+        }
+        lastSyncedUserId = currentUserId;
+      });
+    }
   } catch (error) {
     setStatus(`Unable to check session: ${formatError(error)}`, true);
   }
@@ -298,8 +531,20 @@ function createRecordElement(record: PostRecord, canDelete: boolean): HTMLElemen
   meta.appendChild(createdAt);
 
   header.appendChild(meta);
-
   wrapper.appendChild(header);
+
+  const extraMeta = [
+    record.post_type,
+    typeof record.team_size === "number" ? `team ${record.team_size}` : null,
+    record.project_duration,
+    record.work_style,
+  ].filter(Boolean);
+
+  if (extraMeta.length > 0) {
+    const details = document.createElement("p");
+    details.textContent = extraMeta.join(" • ");
+    wrapper.appendChild(details);
+  }
 
   const parsedBody = parseRecordBody(record.body);
   const imageUrls = getRecordImageUrls(record);
@@ -367,22 +612,34 @@ async function refreshHistory(): Promise<void> {
     return;
   }
 
+  const requestId = ++recordsLoadRequestId;
   historyEl.replaceChildren();
+  const loading = document.createElement("p");
+  loading.className = "empty";
+  loading.textContent = "Loading posts...";
+  historyEl.appendChild(loading);
+  updateFilterIndicator();
 
   try {
-    const session = await getSession();
-    const { data: records, error } = await getRecords();
+    const { data: records, error } = await getRecords(appliedFilters);
+    if (requestId !== recordsLoadRequestId) {
+      return;
+    }
+
     if (error) {
       throw error;
     }
 
     const safeRecords = (records || []) as PostRecord[];
-    const canDelete = session !== null;
+    const canDelete = getCachedSession() !== null;
+    historyEl.replaceChildren();
 
     if (safeRecords.length === 0) {
       const emptyState = document.createElement("p");
       emptyState.className = "empty";
-      emptyState.textContent = "No records yet.";
+      emptyState.textContent = hasAppliedFilters(appliedFilters)
+        ? "No posts matched the applied filters."
+        : "No records yet.";
       historyEl.appendChild(emptyState);
       return;
     }
@@ -391,6 +648,15 @@ async function refreshHistory(): Promise<void> {
       historyEl.appendChild(createRecordElement(record, canDelete));
     });
   } catch (error) {
+    if (requestId !== recordsLoadRequestId) {
+      return;
+    }
+
+    historyEl.replaceChildren();
+    const errorState = document.createElement("p");
+    errorState.className = "empty";
+    errorState.textContent = "Unable to load posts.";
+    historyEl.appendChild(errorState);
     setStatus(`Unable to load records: ${formatError(error)}`, true);
   }
 }
@@ -443,28 +709,89 @@ createImagesInput?.addEventListener("change", () => {
     return;
   }
 
-  const validNewFiles = newFiles.filter((file) => isAllowedImageFile(file));
-  const invalidNewFiles = newFiles.filter((file) => !isAllowedImageFile(file));
+  const validNewFiles = newFiles.filter((file) =>
+    ALLOWED_TEMP_IMAGE_MIME_TYPES.has((file.type || "").toLowerCase())
+  );
+  const invalidNewFiles = newFiles.filter(
+    (file) => !ALLOWED_TEMP_IMAGE_MIME_TYPES.has((file.type || "").toLowerCase())
+  );
 
-  const existingKeys = new Set(selectedImageFiles.map((file) => getFileKey(file)));
+  const existingKeys = new Set(
+    pendingTempImageFiles.map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+  );
+
   validNewFiles.forEach((file) => {
-    const key = getFileKey(file);
+    const key = `${file.name}:${file.size}:${file.lastModified}`;
     if (!existingKeys.has(key)) {
-      selectedImageFiles.push(file);
+      pendingTempImageFiles.push(file);
       existingKeys.add(key);
     }
   });
 
   if (invalidNewFiles.length > 0) {
-    const invalidNames = invalidNewFiles.map((file) => file.name).join(", ");
-    setStatus(
-      `Ignored unsupported image file(s): ${invalidNames}. Allowed: jpeg, png, webp, gif.`,
-      true,
+    setTempUploadStatus(
+      `Ignored unsupported image file(s): ${invalidNewFiles.map((file) => file.name).join(", ")}. Allowed: jpeg, png, webp.`,
+      true
     );
+    return;
   }
 
-  syncSelectedImagesInput();
-  renderImagePreviews();
+  setTempUploadStatus(
+    `${pendingTempImageFiles.length} image file(s) selected. Click "Upload Temp Images" to create temp uploads.`
+  );
+});
+
+uploadTempImagesButton?.addEventListener("click", async () => {
+  if (pendingTempImageFiles.length === 0) {
+    setTempUploadStatus("Select one or more images first.", true);
+    return;
+  }
+
+  try {
+    setTempUploadStatus(`Uploading ${pendingTempImageFiles.length} temp image(s)...`);
+
+    const startSortOrder = tempUploads.length;
+    const uploadedItems: TempUploadItem[] = [];
+
+    for (const [index, file] of pendingTempImageFiles.entries()) {
+      const { data, error } = await createTempUpload(file, startSortOrder + index);
+      if (error) {
+        setTempUploadStatus(`Temp upload failed: ${error.message}`, true);
+        return;
+      }
+
+      if (data) {
+        uploadedItems.push({
+          ...data,
+          file_name: file.name,
+          local_preview_url: URL.createObjectURL(file),
+        });
+      }
+    }
+
+    tempUploads = [...tempUploads, ...uploadedItems];
+    pendingTempImageFiles = [];
+    if (createImagesInput) {
+      createImagesInput.value = "";
+    }
+    renderTempUploadPreviews();
+    setTempUploadStatus(`Uploaded ${uploadedItems.length} temp image(s).`);
+  } catch (error) {
+    setTempUploadStatus(`Temp upload failed: ${formatError(error)}`, true);
+  }
+});
+
+applyFiltersButton?.addEventListener("click", async () => {
+  appliedFilters = collectFiltersFromInputs();
+  updateFilterIndicator();
+  await refreshHistory();
+});
+
+resetFiltersButton?.addEventListener("click", async () => {
+  clearFilterInputs();
+  appliedFilters = {};
+  updateFilterIndicator();
+  await refreshHistory();
 });
 
 createForm?.addEventListener("submit", async (event) => {
@@ -472,46 +799,61 @@ createForm?.addEventListener("submit", async (event) => {
 
   const cleanTitle = createTitleInput?.value.trim() || "";
   const cleanBody = createBodyInput?.value.trim() || "";
+  const postType = createPostTypeInput?.value.trim() || "";
+  const teamSize = parseOptionalInteger(createTeamSizeInput?.value);
+  const projectDuration = createProjectDurationInput?.value.trim() || "";
+  const recruitmentDeadline = createRecruitmentDeadlineInput?.value.trim() || "";
+  const workStyle = createWorkStyleInput?.value.trim() || "";
+  const contactEmail = createContactEmailInput?.value.trim() || "";
+  const commitmentLevel = createCommitmentLevelInput?.value.trim() || "";
+  const { positionCounts, error: positionCountsError } = parsePositionCounts(
+    createPositionCountsInput?.value
+  );
+
   if (!cleanTitle || !cleanBody) {
     setStatus("Title and body are required.", true);
     return;
   }
 
+  if (!postType || teamSize === undefined || !projectDuration || !recruitmentDeadline || !workStyle) {
+    setStatus("Post type, team size, project duration, recruitment deadline, and work style are required.", true);
+    return;
+  }
+
+  if (!contactEmail || !commitmentLevel) {
+    setStatus("Contact email and commitment level are required.", true);
+    return;
+  }
+
+  if (!positionCounts || positionCountsError) {
+    setStatus(positionCountsError || "Position counts are required.", true);
+    return;
+  }
+
   try {
-    const selectedImages = [...selectedImageFiles];
-    const { data: createdPost, error: createError } = await createRecord(cleanTitle, cleanBody);
+    const payload: CreatePostPayload = {
+      title: cleanTitle,
+      body: cleanBody,
+      post_type: postType,
+      team_size: teamSize,
+      project_duration: projectDuration,
+      recruitment_deadline: recruitmentDeadline,
+      work_style: workStyle,
+      location_state: createLocationStateInput?.value.trim() || null,
+      location_city: createLocationCityInput?.value.trim() || null,
+      contact_email: contactEmail,
+      contact_discord: createContactDiscordInput?.value.trim() || null,
+      contact_slack: createContactSlackInput?.value.trim() || null,
+      commitment_level: commitmentLevel,
+      position_counts: positionCounts,
+      tech_stacks: parseCsvValues(createTechStacksInput?.value),
+      temp_upload_ids: tempUploads.map((upload) => upload.upload_id),
+    };
+
+    const { error: createError } = await createRecord(payload);
     if (createError) {
       setStatus(`Create failed: ${createError.message}`, true);
       return;
-    }
-
-    const createdPostId = createdPost?.post_id;
-    if (!createdPostId) {
-      setStatus("Create failed: missing created post id.", true);
-      return;
-    }
-
-    if (selectedImages.length > 0) {
-      setStatus(`Uploading ${selectedImages.length} image(s)...`);
-      const uploadResults = await Promise.all(
-        selectedImages.map((file, index) => uploadImage(file, createdPostId, index)),
-      );
-
-      const firstUploadError = uploadResults.find((result) => result.error)?.error;
-      if (firstUploadError) {
-        const { error: rollbackError } = await deleteRecord(String(createdPostId));
-        if (rollbackError) {
-          setStatus(
-            `Create failed: ${firstUploadError.message}. Rollback failed: ${rollbackError.message}`,
-            true,
-          );
-          return;
-        }
-
-        setStatus(`Create failed: ${firstUploadError.message}`, true);
-        await refreshHistory();
-        return;
-      }
     }
 
     setStatus("Record created.");
@@ -524,17 +866,30 @@ createForm?.addEventListener("submit", async (event) => {
 });
 
 async function logSessionForTesting(): Promise<void> {
-  if (typeof window === "undefined" || !window.supabase) {
-    return;
+  try {
+    const session = await getSession();
+    console.log("SUPBASE TOKEN:\n" + session?.access_token + "\n", null);
+  } catch (error) {
+    console.log("SUPBASE TOKEN:\nundefined\n", error);
   }
-
-  const { data, error } = await window.supabase.auth.getSession();
-  console.log("SUPBASE TOKEN:\n" + data.session?.access_token + "\n", error);
 }
 
-void logSessionForTesting();
-void checkLogin();
-void refreshHistory();
+onAuthStateChange(async () => {
+  await logSessionForTesting();
+  await checkLogin();
+  await refreshHistory();
+});
+
+async function bootstrap(): Promise<void> {
+  updateFilterIndicator();
+  renderTempUploadPreviews();
+  await refreshHistory();
+  void logSessionForTesting();
+  await checkLogin();
+  await refreshHistory();
+}
+
+void bootstrap();
 
 if (googleSignInIcon) googleSignInIcon.src = googleLogo;
 if (githubSignInIcon) githubSignInIcon.src = githubLogo;

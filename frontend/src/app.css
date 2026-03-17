@@ -174,8 +174,38 @@ input[type="button"]:hover {
   color: #475569;
 }
 
+.filters-panel {
+  margin-bottom: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.filters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.75rem;
+  align-items: center;
+}
+
+.filter-indicator {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
 .create-form input[type="text"],
+.create-form input[type="email"],
+.create-form input[type="number"],
+.create-form input[type="date"],
 .create-form input[type="file"],
+.create-form select,
 .create-form textarea {
   width: 100%;
   border: 1px solid #dbeafe;
@@ -189,6 +219,39 @@ input[type="button"]:hover {
 .create-form textarea {
   resize: vertical;
   min-height: 7rem;
+}
+
+.filters-grid input[type="text"],
+.filters-grid input[type="number"],
+.filters-grid input[type="date"],
+.filters-grid select {
+  width: 100%;
+  border: 1px solid #dbeafe;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+.filters-grid input[type="checkbox"] {
+  justify-self: start;
+}
+
+.temp-upload-panel {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.temp-upload-panel h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.helper-text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #475569;
 }
 
 .image-preview-grid {
@@ -262,4 +325,15 @@ input[type="button"]:hover {
 
 .form-actions button:hover {
   background: #e0e7ff;
+}
+
+@media (max-width: 640px) {
+  .filters-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
 }

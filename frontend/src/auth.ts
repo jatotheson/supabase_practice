@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type Session } from "@supabase/supabase-js";
 
 const SUPABASE_URL =
   import.meta.env.VITE_SUPABASE_URL || "https://hbqyrvxbvrtktkxvbtwf.supabase.co";
@@ -7,6 +7,10 @@ const SUPABASE_PUBLIC_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhicXlydnhidnJ0a3RreHZidHdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1OTg4MDMsImV4cCI6MjA4NzE3NDgwM30.RP4LrppCwRpyIEeUx7fn7Ibgb6oZOTOVTiBU4tcz8Uw";
 
 const client = createClient(SUPABASE_URL, SUPABASE_PUBLIC_ANON_KEY);
+
+let cachedSession: Session | null = null;
+let sessionLoaded = false;
+let sessionLoadPromise: Promise<Session | null> | null = null;
 
 declare global {
   interface Window {
@@ -17,6 +21,11 @@ declare global {
 if (typeof window !== "undefined") {
   window.supabase = client;
 }
+
+client.auth.onAuthStateChange((_event, session) => {
+  cachedSession = session;
+  sessionLoaded = true;
+});
 
 function getRedirectUrl() {
   if (typeof window === "undefined") {
@@ -54,8 +63,28 @@ function clearSupabaseAuthCache() {
 }
 
 export async function getSession() {
-  const { data } = await client.auth.getSession();
-  return data.session;
+  if (sessionLoaded && !sessionLoadPromise) {
+    return cachedSession;
+  }
+
+  if (!sessionLoadPromise) {
+    sessionLoadPromise = client.auth
+      .getSession()
+      .then(({ data }) => {
+        cachedSession = data.session;
+        sessionLoaded = true;
+        return cachedSession;
+      })
+      .finally(() => {
+        sessionLoadPromise = null;
+      });
+  }
+
+  return sessionLoadPromise;
+}
+
+export function getCachedSession() {
+  return cachedSession;
 }
 
 export async function signInWithGoogle() {
@@ -85,7 +114,20 @@ export async function signInWithGithub() {
 }
 
 export async function signOut() {
-  const result = await client.auth.signOut({ scope: "global" });
+  cachedSession = null;
+  sessionLoaded = true;
+  const result = await client.auth.signOut({ scope: "local" });
+  await client.auth.signOut({ scope: "global" }).catch(() => undefined);
   clearSupabaseAuthCache();
   return result;
+}
+
+export function onAuthStateChange(
+  callback: Parameters<typeof client.auth.onAuthStateChange>[0]
+) {
+  return client.auth.onAuthStateChange(callback);
+}
+
+if (typeof window !== "undefined") {
+  void getSession().catch(() => undefined);
 }

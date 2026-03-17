@@ -19,15 +19,156 @@
       <input type="button" value="create" id="create_btn" />
     </div>
     <p id="status" aria-live="polite"></p>
+    <section class="record filters-panel">
+      <div class="filters-header">
+        <h2>Post Filters</h2>
+        <div class="form-actions">
+          <button type="button" id="apply_filters_btn">Apply Filters</button>
+          <button type="button" id="reset_filters_btn">Reset</button>
+        </div>
+      </div>
+      <p id="filter_indicator" class="filter-indicator">No filters applied. Showing all available posts.</p>
+      <div class="filters-grid">
+        <label for="filter_post_type">Post Type</label>
+        <select id="filter_post_type" name="post_type">
+          <option value="">Any</option>
+          <option value="portfolio">portfolio</option>
+          <option value="startup">startup</option>
+          <option value="learning">learning</option>
+          <option value="open_source">open_source</option>
+        </select>
+
+        <label for="filter_team_size_min">Team Size Min</label>
+        <input type="number" id="filter_team_size_min" name="team_size_min" min="1" />
+
+        <label for="filter_team_size_max">Team Size Max</label>
+        <input type="number" id="filter_team_size_max" name="team_size_max" min="1" />
+
+        <label for="filter_project_duration">Project Duration (csv)</label>
+        <input type="text" id="filter_project_duration" name="project_duration" placeholder="1_3_months,ongoing" />
+
+        <label for="filter_deadline_before">Deadline Before</label>
+        <input type="date" id="filter_deadline_before" name="recruitment_deadline_before" />
+
+        <label for="filter_deadline_after">Deadline After</label>
+        <input type="date" id="filter_deadline_after" name="recruitment_deadline_after" />
+
+        <label for="filter_work_style">Work Style (csv)</label>
+        <input type="text" id="filter_work_style" name="work_style" placeholder="online,offline" />
+
+        <label for="filter_location_state">Location State (csv)</label>
+        <input type="text" id="filter_location_state" name="location_state" placeholder="california,arizona" />
+
+        <label for="filter_location_city">Location City</label>
+        <input type="text" id="filter_location_city" name="location_city" />
+
+        <label for="filter_commitment_level">Commitment Level (csv)</label>
+        <input type="text" id="filter_commitment_level" name="commitment_level" placeholder="part_time,full_time" />
+
+        <label for="filter_bookmarked">Bookmarked Only</label>
+        <input type="checkbox" id="filter_bookmarked" name="bookmarked" />
+
+        <label for="filter_positions">Positions (csv)</label>
+        <input type="text" id="filter_positions" name="positions" placeholder="frontend,designer" />
+
+        <label for="filter_positions_match">Positions Match</label>
+        <select id="filter_positions_match" name="positions_match">
+          <option value="">Default</option>
+          <option value="any">any</option>
+          <option value="all">all</option>
+        </select>
+
+        <label for="filter_tech_stacks">Tech Stacks (csv)</label>
+        <input type="text" id="filter_tech_stacks" name="tech_stacks" placeholder="react,nodejs" />
+
+        <label for="filter_tech_stacks_match">Tech Stacks Match</label>
+        <select id="filter_tech_stacks_match" name="tech_stacks_match">
+          <option value="">Default</option>
+          <option value="any">any</option>
+          <option value="all">all</option>
+        </select>
+
+        <label for="filter_limit">Limit</label>
+        <input type="number" id="filter_limit" name="limit" min="1" max="100" />
+
+        <label for="filter_offset">Offset</label>
+        <input type="number" id="filter_offset" name="offset" min="0" />
+
+        <label for="filter_sort">Sort</label>
+        <select id="filter_sort" name="sort">
+          <option value="">Default</option>
+          <option value="created_at">created_at</option>
+          <option value="post_id">post_id</option>
+          <option value="title">title</option>
+        </select>
+
+        <label for="filter_order">Order</label>
+        <select id="filter_order" name="order">
+          <option value="">Default</option>
+          <option value="asc">asc</option>
+          <option value="desc">desc</option>
+        </select>
+      </div>
+    </section>
     <form id="create_form" class="record create-form" hidden>
       <h2>Create Post</h2>
       <label for="create_title">Title</label>
       <input type="text" id="create_title" name="title" maxlength="120" />
       <label for="create_body">Body</label>
       <textarea id="create_body" name="body" rows="4"></textarea>
-      <label for="create_images">Attach Images</label>
-      <input type="file" id="create_images" name="images" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" multiple />
-      <div id="create_images_preview" class="image-preview-grid" hidden></div>
+      <label for="create_post_type">Post Type</label>
+      <select id="create_post_type" name="post_type">
+        <option value="portfolio">portfolio</option>
+        <option value="startup">startup</option>
+        <option value="learning">learning</option>
+        <option value="open_source">open_source</option>
+      </select>
+      <label for="create_team_size">Team Size</label>
+      <input type="number" id="create_team_size" name="team_size" min="1" value="1" />
+      <label for="create_project_duration">Project Duration</label>
+      <select id="create_project_duration" name="project_duration">
+        <option value="under_1_month">under_1_month</option>
+        <option value="1_3_months" selected>1_3_months</option>
+        <option value="3_6_months">3_6_months</option>
+        <option value="6_plus_months">6_plus_months</option>
+        <option value="ongoing">ongoing</option>
+      </select>
+      <label for="create_recruitment_deadline">Recruitment Deadline</label>
+      <input type="date" id="create_recruitment_deadline" name="recruitment_deadline" />
+      <label for="create_work_style">Work Style</label>
+      <select id="create_work_style" name="work_style">
+        <option value="all">all</option>
+        <option value="online" selected>online</option>
+        <option value="offline">offline</option>
+      </select>
+      <label for="create_location_state">Location State</label>
+      <input type="text" id="create_location_state" name="location_state" />
+      <label for="create_location_city">Location City</label>
+      <input type="text" id="create_location_city" name="location_city" />
+      <label for="create_contact_email">Contact Email</label>
+      <input type="email" id="create_contact_email" name="contact_email" />
+      <label for="create_contact_discord">Contact Discord</label>
+      <input type="text" id="create_contact_discord" name="contact_discord" />
+      <label for="create_contact_slack">Contact Slack</label>
+      <input type="text" id="create_contact_slack" name="contact_slack" />
+      <label for="create_commitment_level">Commitment Level</label>
+      <select id="create_commitment_level" name="commitment_level">
+        <option value="casual">casual</option>
+        <option value="part_time" selected>part_time</option>
+        <option value="full_time">full_time</option>
+      </select>
+      <label for="create_position_counts">Position Counts</label>
+      <input type="text" id="create_position_counts" name="position_counts" placeholder="backend:2,frontend:1" />
+      <label for="create_tech_stacks">Tech Stacks (csv)</label>
+      <input type="text" id="create_tech_stacks" name="tech_stacks" placeholder="react,nodejs" />
+      <div class="temp-upload-panel">
+        <h3>Temporary Images</h3>
+        <label for="create_images">Select Images</label>
+        <input type="file" id="create_images" name="images" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" multiple />
+        <button type="button" id="upload_temp_images_btn">Upload Temp Images</button>
+        <p id="temp_upload_status" class="helper-text"></p>
+        <div id="create_images_preview" class="image-preview-grid" hidden></div>
+      </div>
       <div class="form-actions">
         <button type="submit" id="create_submit_btn">Save</button>
       </div>
