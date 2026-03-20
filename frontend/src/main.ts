@@ -83,6 +83,7 @@ let pendingTempImageFiles: File[] = [];
 let tempUploads: TempUploadItem[] = [];
 let appliedFilters: PostFilters = {};
 let recordsLoadRequestId = 0;
+let lastLoggedSessionToken: string | null | undefined;
 
 const ALLOWED_TEMP_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
@@ -868,8 +869,17 @@ createForm?.addEventListener("submit", async (event) => {
 async function logSessionForTesting(): Promise<void> {
   try {
     const session = await getSession();
-    console.log("SUPBASE TOKEN:\n" + session?.access_token + "\n", null);
+    const accessToken = session?.access_token;
+    if (accessToken === lastLoggedSessionToken) {
+      return;
+    }
+    lastLoggedSessionToken = accessToken;
+    console.log("SUPBASE TOKEN:\n" + accessToken + "\n", null);
   } catch (error) {
+    if (lastLoggedSessionToken === undefined) {
+      return;
+    }
+    lastLoggedSessionToken = undefined;
     console.log("SUPBASE TOKEN:\nundefined\n", error);
   }
 }
@@ -893,3 +903,4 @@ void bootstrap();
 
 if (googleSignInIcon) googleSignInIcon.src = googleLogo;
 if (githubSignInIcon) githubSignInIcon.src = githubLogo;
+if (logoutButton) logoutButton.style.display = "none";
